@@ -448,7 +448,12 @@ def interactive_pager(content: str) -> None:
       • Supports: Arrow Up/Down, Page Up/Down, Home/End, Space, q
       • Works inside Windows Terminal, conhost, and PyInstaller .exe
     """
-    import msvcrt
+    try:
+        import msvcrt
+    except ImportError:
+        # Fallback if somehow not on Windows and interactive_pager was called
+        sys.stdout.write(content)
+        return
 
     lines = content.splitlines()
     total = len(lines)
@@ -582,6 +587,19 @@ def render_report(
     ANSI color support.
     """
     global console
+
+    # Fallback to Rich's built-in pager on non-Windows platforms
+    if os.name != "nt":
+        with console.pager(styles=True):
+            print_banner()
+            print_hardware_panel(cpu, ram_gb, vram_gb, gpu_name)
+            print_recommended_table(recommended)
+            print_too_heavy_table(too_heavy)
+            print_tips(vram_gb)
+            print_footer()
+        return
+
+    # ── Windows Custom Interactive Pager (preserves colors) ───────
 
     # Measure the real terminal so Rich wraps tables correctly
     # Subtract 1 from columns to prevent exact-width line auto-wrapping on Windows
