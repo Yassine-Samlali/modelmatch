@@ -45,11 +45,14 @@ if sys.stderr.encoding != "utf-8":
         sys.stderr.buffer, encoding="utf-8", errors="replace"
     )
 
+import urllib.request
+import urllib.error
+
 import psutil
 from rich import box
 from rich.console import Console
 from rich.panel import Panel
-from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeElapsedColumn
+from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeElapsedColumn, DownloadColumn, TransferSpeedColumn
 from rich.table import Table
 from rich.text import Text
 
@@ -76,52 +79,40 @@ console = Console(force_terminal=True)
 
 MODEL_DATABASE = [
     {
-        "name": "Phi-3 Mini",
+        "name": "Phi-3.5 Mini (2026 Edition)",
         "parameters": "3.8B",
         "min_ram_gb": 4,
         "min_vram_gb": 0,
         "use_case": "Ultra-light reasoning, coding assistant",
-        "quant_size_gb": 2.3,
+        "quant_size_gb": 2.2,
+        "download_url": "https://huggingface.co/microsoft/Phi-3-mini-4k-instruct-gguf/resolve/main/Phi-3-mini-4k-instruct-q4.gguf",
     },
     {
-        "name": "Gemma 2 2B",
+        "name": "Gemma 2 2B Instruct",
         "parameters": "2B",
         "min_ram_gb": 4,
         "min_vram_gb": 0,
         "use_case": "Edge-device chat, fast summarization",
         "quant_size_gb": 1.6,
+        "download_url": "https://huggingface.co/bartowski/gemma-2-2b-it-GGUF/resolve/main/gemma-2-2b-it-Q4_K_M.gguf",
+    },
+    {
+        "name": "Llama 3.1 8B Instruct",
+        "parameters": "8B",
+        "min_ram_gb": 8,
+        "min_vram_gb": 6,
+        "use_case": "Versatile assistant, creative writing",
+        "quant_size_gb": 4.6,
+        "download_url": "https://huggingface.co/bartowski/Meta-Llama-3.1-8B-Instruct-GGUF/resolve/main/Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf",
     },
     {
         "name": "Mistral 7B v0.3",
         "parameters": "7B",
         "min_ram_gb": 8,
         "min_vram_gb": 4,
-        "use_case": "General chat, instruction following",
+        "use_case": "General chat, balanced performance",
         "quant_size_gb": 4.1,
-    },
-    {
-        "name": "Llama 3 8B Instruct",
-        "parameters": "8B",
-        "min_ram_gb": 8,
-        "min_vram_gb": 6,
-        "use_case": "Versatile assistant, creative writing",
-        "quant_size_gb": 4.7,
-    },
-    {
-        "name": "Gemma 2 9B",
-        "parameters": "9B",
-        "min_ram_gb": 10,
-        "min_vram_gb": 6,
-        "use_case": "High-quality reasoning, multilingual",
-        "quant_size_gb": 5.4,
-    },
-    {
-        "name": "DeepSeek-Coder-V2 Lite",
-        "parameters": "16B (MoE)",
-        "min_ram_gb": 10,
-        "min_vram_gb": 6,
-        "use_case": "Code generation & debugging",
-        "quant_size_gb": 5.9,
+        "download_url": "https://huggingface.co/bartowski/Mistral-7B-Instruct-v0.3-GGUF/resolve/main/Mistral-7B-Instruct-v0.3-Q4_K_M.gguf",
     },
     {
         "name": "Qwen 2.5 14B",
@@ -129,7 +120,17 @@ MODEL_DATABASE = [
         "min_ram_gb": 12,
         "min_vram_gb": 8,
         "use_case": "Math, coding, and long-context tasks",
-        "quant_size_gb": 8.2,
+        "quant_size_gb": 8.4,
+        "download_url": "https://huggingface.co/bartowski/Qwen2.5-14B-Instruct-GGUF/resolve/main/Qwen2.5-14B-Instruct-Q4_K_M.gguf",
+    },
+    {
+        "name": "DeepSeek-Coder-V2 Lite",
+        "parameters": "16B (MoE)",
+        "min_ram_gb": 12,
+        "min_vram_gb": 6,
+        "use_case": "Code generation & debugging",
+        "quant_size_gb": 9.7,
+        "download_url": "https://huggingface.co/bartowski/DeepSeek-Coder-V2-Lite-Base-GGUF/resolve/main/DeepSeek-Coder-V2-Lite-Base-Q4_K_M.gguf",
     },
     {
         "name": "Command-R (35B)",
@@ -137,15 +138,17 @@ MODEL_DATABASE = [
         "min_ram_gb": 24,
         "min_vram_gb": 16,
         "use_case": "RAG, enterprise search, tool use",
-        "quant_size_gb": 19.5,
+        "quant_size_gb": 20.0,
+        "download_url": "https://huggingface.co/bartowski/c4ai-command-r-v01-GGUF/resolve/main/c4ai-command-r-v01-Q4_K_M.gguf",
     },
     {
-        "name": "Llama 3 70B Instruct",
+        "name": "Llama 3.3 70B Instruct",
         "parameters": "70B",
         "min_ram_gb": 48,
         "min_vram_gb": 40,
         "use_case": "Near-GPT-4 quality, research-grade",
-        "quant_size_gb": 40.0,
+        "quant_size_gb": 39.6,
+        "download_url": "https://huggingface.co/bartowski/Llama-3.3-70B-Instruct-GGUF/resolve/main/Llama-3.3-70B-Instruct-Q4_K_M.gguf",
     },
     {
         "name": "Mixtral 8x7B",
@@ -153,7 +156,8 @@ MODEL_DATABASE = [
         "min_ram_gb": 32,
         "min_vram_gb": 24,
         "use_case": "MoE powerhouse, multitask expert",
-        "quant_size_gb": 26.4,
+        "quant_size_gb": 24.6,
+        "download_url": "https://huggingface.co/TheBloke/Mixtral-8x7B-Instruct-v0.1-GGUF/resolve/main/mixtral-8x7b-instruct-v0.1.Q4_K_M.gguf",
     },
 ]
 
@@ -432,7 +436,121 @@ def print_footer() -> None:
         "and community benchmarks.[/dim]"
     )
     console.print()
+    console.print(
+        Panel(
+            "[bold bright_yellow]Want to download one of these models?[/bold bright_yellow]\n"
+            "Press [bold bright_green] q [/bold bright_green] on your keyboard to exit this viewer and open the Installation/Download Menu!",
+            border_style="bright_green",
+            box=box.DOUBLE,
+            padding=(1, 2)
+        )
+    )
+    console.print()
 
+
+# ────────────────────────────────────────────────────────────────────
+# Downloader
+# ────────────────────────────────────────────────────────────────────
+
+def _get_app_dir() -> str:
+    """Return the directory where the script or .exe lives."""
+    if getattr(sys, "frozen", False):
+        # Running as a PyInstaller bundle → sys.executable is the .exe path
+        return os.path.dirname(sys.executable)
+    return os.path.dirname(os.path.abspath(__file__))
+
+
+def download_model(url: str, dest_filename: str) -> None:
+    """Download a model file with a rich progress bar."""
+    models_dir = os.path.join(_get_app_dir(), "models")
+    os.makedirs(models_dir, exist_ok=True)
+    dest_path = os.path.join(models_dir, dest_filename)
+    
+    if os.path.exists(dest_path):
+        console.print(f"\n[yellow]Model already exists at:[/yellow] {dest_path}")
+        return
+
+    try:
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req) as response:
+            total_size_in_bytes = int(response.headers.get('content-length', 0))
+            block_size = 1024 * 1024  # 1 MB chunk
+            
+            with Progress(
+                TextColumn("[bold bright_cyan]{task.description}"),
+                BarColumn(bar_width=40, complete_style="bright_green", finished_style="bold bright_green"),
+                "[progress.percentage]{task.percentage:>3.1f}%",
+                "•",
+                DownloadColumn(),
+                "•",
+                TransferSpeedColumn(),
+                "•",
+                TimeElapsedColumn(),
+                console=console,
+            ) as progress:
+                task = progress.add_task(f"Downloading [bold]{dest_filename}[/bold]...", total=total_size_in_bytes)
+                with open(dest_path, 'wb') as file:
+                    while True:
+                        data = response.read(block_size)
+                        if not data:
+                            break
+                        file.write(data)
+                        progress.update(task, advance=len(data))
+                        
+        console.print(f"\n[bold bright_green]Successfully downloaded to:[/bold bright_green] {dest_path}")
+    except urllib.error.URLError as e:
+        console.print(f"\n[bold red]Network error occurred:[/bold red] {e}")
+    except Exception as e:
+        console.print(f"\n[bold red]Failed to download model:[/bold red] {e}")
+
+
+def interactive_download_prompt(recommended_models: list[dict]) -> None:
+    """Prompt the user to select and download a recommended model."""
+    if not recommended_models:
+        return
+        
+    console.print()
+    console.print(Panel(
+        "You can now download one of the recommended models directly.\n"
+        "Models will be saved to the [bold cyan]models/[/bold cyan] folder.",
+        title="[bold green]Download Manager[/bold green]",
+        border_style="green",
+        padding=(1, 2)
+    ))
+    
+    answer = console.input("[bold yellow]Would you like to download a model? (y/n): [/bold yellow]").strip().lower()
+    if answer not in ("y", "yes"):
+        return
+        
+    console.print("\n[bold bright_white]Available models to download:[/bold bright_white]")
+    for i, m in enumerate(recommended_models, 1):
+        console.print(f"  [bright_green][{i}][/bright_green] {m['name']} [dim](~{m['quant_size_gb']} GB)[/dim]")
+        
+    console.print("  [bright_green][0][/bright_green] Cancel")
+    
+    while True:
+        choice_str = console.input(f"\n[bold yellow]Select a model to download [0-{len(recommended_models)}]: [/bold yellow]").strip()
+        if not choice_str.isdigit():
+            console.print("[red]Please enter a valid number.[/red]")
+            continue
+            
+        choice = int(choice_str)
+        if choice == 0:
+            console.print("[yellow]Download aborted.[/yellow]")
+            return
+        if 1 <= choice <= len(recommended_models):
+            selected = recommended_models[choice - 1]
+            break
+        console.print(f"[red]Please enter a number between 0 and {len(recommended_models)}.[/red]")
+        
+    # Extract filename from URL or make a safe one
+    url = selected["download_url"]
+    filename = url.split("/")[-1]
+    if not filename.endswith(".gguf"):
+        filename = f"{selected['name'].replace(' ', '_')}.gguf"
+        
+    console.print()
+    download_model(url, filename)
 
 # ────────────────────────────────────────────────────────────────────
 # Interactive Pager (Windows-friendly, preserves Rich colors)
@@ -480,7 +598,7 @@ def interactive_pager(content: str) -> None:
             pct = "End"
         else:
             pct = f"{int(pos / max_scroll * 100)}%"
-        bar = f" \u2191\u2193 Scroll  PgUp/PgDn  Space  q=Quit  [{pct}]"
+        bar = f" \u2191\u2193 Scroll  PgUp/PgDn  Space  q=Exit View  [{pct}]"
         buf.append(f"\033[2K\033[7m{bar:<{cols}}\033[0m")
         sys.stdout.write("".join(buf))
         sys.stdout.flush()
@@ -676,20 +794,20 @@ def main() -> None:
     # press 'q' to exit.
     render_report(cpu, ram_gb, vram_gb, gpu_name, recommended, too_heavy)
 
+    # ── Prompt for Downloading ─────────────────────────────────────
+    interactive_download_prompt(recommended)
+
 
 # ────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    _pager_exited = False
     try:
         main()
-        _pager_exited = True
     except KeyboardInterrupt:
-        console.print("\n[yellow]Scan cancelled by user.[/yellow]")
+        console.print("\n[yellow]Execution cancelled by user.[/yellow]")
     except Exception as exc:
         # Last-resort handler so the .exe never silently closes
         console.print(f"\n[bold red]Unexpected error:[/bold red] {exc}")
     finally:
-        # The interactive pager already kept the screen open,
-        # so input() is only needed for error / interrupt paths.
-        if not _pager_exited:
-            input("\nPress Enter to exit...")
+        # Always wait for input before closing so the final messages are visible
+        # especially helpful when compiled as a PyInstaller .exe
+        input("\nPress Enter to exit...")
